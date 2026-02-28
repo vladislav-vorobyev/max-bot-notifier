@@ -156,7 +156,7 @@ class BotTest extends LocalTestCase
             'POST',
             '/webhook',
             self::UPDATE_EXAMPLE,
-            ['X-Telegram-Bot-Api-Secret-Token' => 'AA']
+            ['X-MAX-Bot-Api-Secret-Token' => 'AA']
         ));
         $result = Storage::get('Bot')->webhook();
 

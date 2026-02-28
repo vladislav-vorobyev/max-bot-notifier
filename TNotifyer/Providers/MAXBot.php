@@ -1,7 +1,7 @@
 <?php
 /**
  * 
- * This file is part of Telegram Notifyer project.
+ * This file is part of MAX Notifyer project.
  * 
  */
 namespace TNotifyer\Providers;
@@ -14,15 +14,15 @@ use TNotifyer\Exceptions\ExternalRequestException;
 
 /**
  * 
- * Provides interface with Telegram bot.
+ * Provides interface with MAX bot.
  * 
  */
-class TelegramBot {
+class MAXBot {
 
     /**
-     * Telegram API URL
+     * MAX API URL
      */
-	public const TELEGRAM_API_URL = 'https://api.telegram.org/bot';
+	public const MAX_API_URL = 'https://api.telegram.org/bot';
 	
     /**
      * Max length of code block to send in alarm message
@@ -30,27 +30,27 @@ class TelegramBot {
 	public const ALARM_CODE_LENGTH = 500;
 	
     /**
-     * @var string Telegram bot API id
+     * @var string MAX bot API id
      */
 	protected $api_id;
 	
     /**
-     * @var string Telegram bot API key
+     * @var string MAX bot API key
      */
 	protected $api_key;
 	
     /**
-     * @var string Full Telegram API path for bot
+     * @var string Full MAX API path for bot
      */
 	protected $api_path;
 	
     /**
-     * @var string Telegram bot webhook secret token
+     * @var string MAX bot webhook secret token
      */
 	protected $api_secret_token;
 	
     /**
-     * @var mixed Telegram bot user (got from API via getMe)
+     * @var mixed MAX bot user (got from API via getMe)
      */
 	protected $info;
 	
@@ -65,12 +65,12 @@ class TelegramBot {
 	protected $bot_host_id;
 	
     /**
-     * @var string Telegram alarm chat id (to notify on error)
+     * @var string MAX alarm chat id (to notify on error)
      */
 	protected $admin_chat_id;
 
     /**
-     * @var array Telegram main chats ids
+     * @var array MAX main chats ids
      */
 	protected $main_chats_ids;
 	
@@ -81,8 +81,8 @@ class TelegramBot {
 	 * 
 	 * @param int T-bot id (in DB identity)
 	 * @param int T-bot host id (web hosting identity)
-	 * @param string Telegram bot API token
-	 * @param string Telegram admin/alarm chat id (to manage and notify on error)
+	 * @param string MAX bot API token
+	 * @param string MAX admin/alarm chat id (to manage and notify on error)
 	 */
 	public function __construct($bot_id, $bot_host_id, $api_token, $admin_chat_id) {
 
@@ -93,11 +93,11 @@ class TelegramBot {
 		// split token into id and key
 		$parsed_token = explode(':', $api_token, 2);
 		if (empty($parsed_token[1]))
-			throw new InternalException('Wrong Telegram Bot token structure!');
+			throw new InternalException('Wrong MAX Bot token structure!');
 		[$this->api_id, $this->api_key] = $parsed_token;
 
 		// prepare API request uri and secret_token
-		$this->api_path = self::TELEGRAM_API_URL . $api_token . '/';
+		$this->api_path = self::MAX_API_URL . $api_token . '/';
 		$this->api_secret_token = substr($this->api_key, 0, 20);
 
 		// testing the token and get bot info (no log this action)
@@ -105,7 +105,7 @@ class TelegramBot {
 		if (self::isOK($resp) && isset($resp['result']))
 			$this->info = $resp['result'];
 		else
-			throw new InternalException('Wrong Telegram Bot token!');
+			throw new InternalException('Wrong MAX Bot token!');
 
 		// get main chats list
 		$this->main_chats_ids = [];
@@ -172,7 +172,7 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Send a request to Telegram API
+	 * Send a request to MAX API
 	 * 
 	 * @param string API method
 	 * @param mixed request data (optional)
@@ -207,14 +207,14 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Get and save updates from Telegram bot
+	 * Get and save updates from MAX bot
 	 * 
 	 * @param bool use an offset from DB in request to get a new only (true by default)
 	 * 
 	 * @return mixed API response
 	 */
 	public function getUpdates($new_only = true) {
-		// Telegram API action
+		// MAX API action
 		$action = 'getUpdates';
 
 		// filter
@@ -238,7 +238,7 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Get and check updates from Telegram bot
+	 * Get and check updates from MAX bot
 	 * 
 	 * @return mixed API response
 	 */
@@ -258,7 +258,7 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Check an update from Telegram bot.
+	 * Check an update from MAX bot.
 	 * Add/remove a chats to/from main list.
 	 * 
 	 * @param mixed incoming API update
@@ -294,14 +294,14 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Telegram bot webhook handler
+	 * MAX bot webhook handler
 	 * 
 	 * @return mixed response to API
 	 */
 	public function webhook() {
 		// check request
 		$request = Storage::get('Request');
-		$r_secret_token = &$request->headers['X-Telegram-Bot-Api-Secret-Token'];
+		$r_secret_token = &$request->headers['X-MAX-Bot-Api-Secret-Token'];
 		if (!isset($r_secret_token) || $r_secret_token != $this->api_secret_token)
 			throw new InternalException('Forbidden!');
 
@@ -323,7 +323,7 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Prepare a Telegram bot webhook URL
+	 * Prepare a MAX bot webhook URL
 	 * 
 	 * @return string webhook URL
 	 */
@@ -333,12 +333,12 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Set a webhook to Telegram bot
+	 * Set a webhook to MAX bot
 	 * 
 	 * @return mixed response from API
 	 */
 	public function setWebhook() {
-		// Telegram API action and request data
+		// MAX API action and request data
 		$action = 'setWebhook';
 		$postfields = [
 			'url' => $this->getWebhookUrl(),
@@ -348,7 +348,7 @@ class TelegramBot {
 		// log
 		Log::put('tbot-send', $action);
 
-		// make request to Telegram API without log for security reason
+		// make request to MAX API without log for security reason
 		$response = $this->send($action, $postfields, false);
 
 		// bot log
@@ -360,25 +360,25 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Remove a webhook from Telegram bot
+	 * Remove a webhook from MAX bot
 	 * 
 	 * @return mixed response from API
 	 */
 	public function removeWebhook() {
-		// make request to Telegram API
+		// make request to MAX API
 		return $this->send('deleteWebhook');
 	}
 	
 	/**
 	 * 
-	 * Get chat information from Telegram
+	 * Get chat information from MAX
 	 * 
 	 * @param string chat id
 	 * 
 	 * @return mixed response from API
 	 */
 	public function getChat($chat_id) {
-		// make request to Telegram API
+		// make request to MAX API
 		return $this->send('getChat', ['chat_id' => $chat_id]);
 	}
 	
@@ -405,7 +405,7 @@ class TelegramBot {
 	
 	/**
 	 * 
-	 * Send a message to Telegram chat
+	 * Send a message to MAX chat
 	 * 
 	 * @param string chat id
 	 * @param string message
@@ -416,7 +416,7 @@ class TelegramBot {
 	 * @return int|bool message id or false
 	 */
 	public function sendMessage($chat_id, $text, $parse_mode = '', $do_log = true, $more_fields = null) {
-		// Telegram API action and request data
+		// MAX API action and request data
 		$action = 'sendMessage';
 		$postfields = [
 			'chat_id' => $chat_id,
@@ -427,7 +427,7 @@ class TelegramBot {
 		if (!empty($more_fields))
 			$postfields = array_merge($postfields, $more_fields);
 
-		// make request to Telegram API
+		// make request to MAX API
 		$response = $this->send($action, $postfields, $do_log);
 		Log::debug(print_r($response, true));
 		
@@ -435,7 +435,7 @@ class TelegramBot {
 	}
 	
 	/**
-	 * Send a text message to the main Telegram chats
+	 * Send a text message to the main MAX chats
 	 * 
 	 * @param string message
 	 * @param string parse mode of the message (optional)
@@ -455,7 +455,7 @@ class TelegramBot {
 	}
 	
 	/**
-	 * Send a reply message to the main Telegram chats
+	 * Send a reply message to the main MAX chats
 	 * 
 	 * @param array message ids to reply
 	 * @param string message
@@ -475,7 +475,7 @@ class TelegramBot {
 	}
 	
 	/**
-	 * Send a text message to the alarm Telegram chat
+	 * Send a text message to the alarm MAX chat
 	 * 
 	 * @param string message
 	 * @param string parse mode of the message (optional)

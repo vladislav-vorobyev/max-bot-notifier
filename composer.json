@@ -1,8 +1,8 @@
 {
-  "name": "vladvro/telegram-bot-notifyer",
+  "name": "vladvro/max-bot-notifyer",
   "type": "project",
-  "description": "Small Telegram bot project to run on micro hosting. Provides notification about new OZON orders.",
-  "keywords": ["telegrambot", "ozon-seller"],
+  "description": "Small MAX bot project to run on micro hosting. Provides notification about new/canceled OZON orders.",
+  "keywords": ["max-bot", "ozon-seller"],
   "license": "Apache-2.0",
   "autoload": {
     "psr-4": {

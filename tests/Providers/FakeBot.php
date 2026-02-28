@@ -1,7 +1,7 @@
 <?php
 /**
  * 
- * This file is part of Telegram Notifyer project.
+ * This file is part of MAX Notifyer project.
  * 
  */
 namespace TNotifyer\Providers;
@@ -42,7 +42,7 @@ class FakeBot extends Bot {
 	 * 
 	 * @param int T-bot id (in DB identity)
 	 * @param int T-bot host id (web hosting identity)
-	 * @param string Telegram bot API token
+	 * @param string MAX bot API token
 	 * @param string Telergam admin/alarm chat id (to manage and notify on error)
 	 */
 	public function __construct($bot_id = 0, $bot_host_id = 0, $api_token = '00:AA', $admin_chat_id = '00') {
@@ -61,7 +61,7 @@ class FakeBot extends Bot {
 	
 	/**
 	 * 
-	 * Send an action to Telegram bot
+	 * Send an action to MAX bot
 	 * 
 	 * @return mixed API response
 	 */
@@ -71,7 +71,7 @@ class FakeBot extends Bot {
 	
 	/**
 	 * 
-	 * Get and save updates from Telegram bot
+	 * Get and save updates from MAX bot
 	 * 
 	 * @return mixed API response
 	 */
@@ -81,7 +81,7 @@ class FakeBot extends Bot {
 	
 	/**
 	 * 
-	 * Prepare a Telegram bot webhook URL
+	 * Prepare a MAX bot webhook URL
 	 * 
 	 * @return string webhook URL
 	 */
@@ -91,7 +91,7 @@ class FakeBot extends Bot {
 	
 	/**
 	 * 
-	 * Send a message to Telegram chat
+	 * Send a message to MAX chat
 	 * 
 	 * @return bool status of the operation
 	 */
@@ -101,7 +101,7 @@ class FakeBot extends Bot {
 	}
 	
 	/**
-	 * Send a text message to the alarm Telegram chat
+	 * Send a text message to the alarm MAX chat
 	 */
 	public function sendToAlarmChat($message, $parse_mode = '', $do_log = false, $more_fields = null) {
 		$this->last_alarm_msg = $message;

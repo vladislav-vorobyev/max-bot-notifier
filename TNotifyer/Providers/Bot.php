@@ -1,7 +1,7 @@
 <?php
 /**
  * 
- * This file is part of Telegram Notifyer project.
+ * This file is part of MAX Notifyer project.
  * 
  */
 namespace TNotifyer\Providers;
@@ -21,7 +21,7 @@ use \DateTime;
  * Provides the bot behavior and some additional actions.
  * 
  */
-class Bot extends TelegramBot {
+class Bot extends MAXBot {
 
 	/**
 	 * Job is active statuses option name
@@ -182,7 +182,7 @@ class Bot extends TelegramBot {
 	
 	/**
 	 * 
-	 * Check an update from Telegram bot (overrides parent).
+	 * Check an update from MAX bot (overrides parent).
 	 * Provides some bot actions via messages.
 	 * 
 	 * @param mixed incoming API update
@@ -371,7 +371,7 @@ class Bot extends TelegramBot {
 	
 	/**
 	 * 
-	 * Send a TelegramBot day activity message to alarm Telegram chat
+	 * Send a MAXBot day activity message to alarm MAX chat
 	 * 
 	 */
 	public function sendTbotDayActivity() {

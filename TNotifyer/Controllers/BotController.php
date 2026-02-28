@@ -1,7 +1,7 @@
 <?php
 /**
  * 
- * This file is part of Telegram Notifyer project.
+ * This file is part of MAX Notifyer project.
  * 
  */
 namespace TNotifyer\Controllers;
@@ -17,7 +17,7 @@ use TNotifyer\Engine\Storage;
 class BotController extends AbstractWebController {
 
     /**
-     * Webhook handler for Telegram bot.
+     * Webhook handler for MAX bot.
      * 
      * @return Response current response
      */
@@ -28,7 +28,7 @@ class BotController extends AbstractWebController {
     }
 
     /**
-     * Set a webhook for the Telegram bot.
+     * Set a webhook for the MAX bot.
      * 
      * @return Response current response
      */
@@ -39,7 +39,7 @@ class BotController extends AbstractWebController {
     }
 
     /**
-     * Remove a webhook from the Telegram bot.
+     * Remove a webhook from the MAX bot.
      * 
      * @return Response current response
      */
@@ -50,7 +50,7 @@ class BotController extends AbstractWebController {
     }
 
     /**
-     * Get and check updates from Telegram bot.
+     * Get and check updates from MAX bot.
      * 
      * @return Response current response
      */
@@ -61,7 +61,7 @@ class BotController extends AbstractWebController {
     }
 
     /**
-     * Send a test message to main Telegram bot chats.
+     * Send a test message to main MAX bot chats.
      * 
      * @return Response current response
      */
@@ -74,7 +74,7 @@ class BotController extends AbstractWebController {
     }
 
     /**
-     * Send a Bot day activity message to alarm Telegram chat.
+     * Send a Bot day activity message to alarm MAX chat.
      * 
      * @return Response current response
      */

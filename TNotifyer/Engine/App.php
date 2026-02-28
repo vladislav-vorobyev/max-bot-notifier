@@ -1,7 +1,7 @@
 <?php
 /**
  * 
- * This file is part of Telegram Notifyer project.
+ * This file is part of MAX Notifyer project.
  * 
  */
 namespace TNotifyer\Engine;
@@ -20,7 +20,7 @@ class App {
      */
     const VARIABLES = [
         'version' => '1.5.0',
-        'name' => 'Telegram Notifyer',
+        'name' => 'MAX Notifyer',
     ];
 
     /**
