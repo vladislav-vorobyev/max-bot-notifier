@@ -81,30 +81,21 @@ class DB extends DBCommon {
 	 * Store to bot_updates table
 	 * 
 	 * @param int bot internal id (-1 = get Bot Id from Storage)
-	 * @param array updates
+	 * @param mixed update
 	 * 
-	 * @return int stored count
+	 * @return int|bool action result
 	 */
-	public static function insert_bot_updates($bot_id, $updates) {
+	public static function insert_bot_update($bot_id, $update) {
 		if ($bot_id === -1) $bot_id = Storage::get('Bot')->getId();
 		$sql = 'INSERT IGNORE INTO bot_updates (bot_id, update_id, cmd, value) VALUES (?,?,?,?)';
-		$count = 0;
-		foreach ($updates as &$update) {
-			// prepare values
-			$update_id = intval($update['update_id']);
-			$keys = array_diff( array_keys($update), ['update_id'] );
-			$cmd = array_shift($keys);
-			$value = json_encode($update);
-			// execute
-			$result = self::execute_sql($sql, 'iiss', $bot_id, $update_id, $cmd, $value);
-			if ($result === false) {
-				return false;
-			}
-			// count
-			$count += $result;
-		}
-		// return count
-		return $count;
+
+		// prepare values
+		$update_id = $update['timestamp'];
+		$cmd = $update['update_type'];
+		$value = json_encode($update);
+
+		// execute
+		return self::execute_sql($sql, 'iiss', $bot_id, $update_id, $cmd, $value);
 	}
 
 	/**

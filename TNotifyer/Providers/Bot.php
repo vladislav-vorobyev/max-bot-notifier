@@ -198,8 +198,8 @@ class Bot extends MAXBot {
 
 			// inspecting message update
 			$message = $update['message'] ?? $update['edited_message'] ?? [];
-			$r_text = &$message['text'];
-			$r_chat_id = &$message['chat']['id'];
+			$r_text = &$message['body']['text'];
+			$r_chat_id = &$message['recipient']['chat_id'];
 			if (!empty($r_text) && !empty($r_chat_id)) {
 
 				// get bot status on this chat

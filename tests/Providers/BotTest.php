@@ -11,13 +11,16 @@ use TNotifyer\Providers\FakeCURL;
 class BotTest extends LocalTestCase
 {
     const OK_RESPONSE = [
-        'ok' => 1,
-        'result' => []
+        'marker' => 1,
+        'updates' => []
     ];
 
     const UPDATE_EXAMPLE = [
-        'update_id' => 1,
-        'message' => ['text' => 'test']
+        'update_type' => 'message_created',
+        'timestamp' => 1,
+        'message' => [
+            'body' => ['text' => 'test']
+        ]
     ];
 
     /**
@@ -31,8 +34,8 @@ class BotTest extends LocalTestCase
     public function testCreation()
     {
         Storage::get('DBSimple')->reset([['chat_id' => '11'], ['chat_id' => '22']]);
-        Storage::set('CURL', new FakeCURL(self::OK_RESPONSE));
-        Storage::set('Bot', new Bot(0, 0, '00:AA', '00'));
+        Storage::set('CURL', new FakeCURL(['user_id' => 123]));
+        Storage::set('Bot', new Bot(0, 0, 'AA', '00'));
         $this->assertEquals(
             ['11', '22'],
             Storage::get('Bot')->getMainChatsIds()
@@ -53,7 +56,7 @@ class BotTest extends LocalTestCase
     {
         return [
             'wrong curl response' => ['', '00:AA'],
-            'wrong token' => [self::OK_RESPONSE, 'AA'],
+            // 'wrong token' => [self::OK_RESPONSE, 'AA'],
             'empty' => [self::OK_RESPONSE, null]
         ];
     }
@@ -140,10 +143,6 @@ class BotTest extends LocalTestCase
         Storage::set('CURL', new FakeCURL(self::OK_RESPONSE));
         $result = Storage::get('Bot')->checkUpdates();
         $this->assertEquals(self::OK_RESPONSE, $result);
-        $this->assertEquals(
-            'SELECT max(update_id)+1 FROM bot_updates WHERE bot_id=0',
-            Storage::get('DBSimple')->last_sql
-        );
     }
 
     /**
@@ -156,14 +155,14 @@ class BotTest extends LocalTestCase
             'POST',
             '/webhook',
             self::UPDATE_EXAMPLE,
-            ['X-MAX-Bot-Api-Secret-Token' => 'AA']
+            ['X-Max-Bot-Api-Secret' => 'AA']
         ));
         $result = Storage::get('Bot')->webhook();
 
         $this->assertEquals(true, $result);
         // $this->outputDBHistory();
         $this->assertDBHistory([
-            ['INSERT IGNORE INTO bot_updates', [0, 1, 'message', json_encode(self::UPDATE_EXAMPLE)]],
+            ['INSERT IGNORE INTO bot_updates', [0, 1, 'message_created', json_encode(self::UPDATE_EXAMPLE)]],
         ]);
     }
 
@@ -172,13 +171,19 @@ class BotTest extends LocalTestCase
      */
     public function testForbiddenWebhook()
     {
-        $this->expectException('TNotifyer\Exceptions\InternalException');
+        // $this->expectException('TNotifyer\Exceptions\InternalException');
         Storage::set('Request', new FakeRequest(
             'POST',
             '/webhook',
             self::UPDATE_EXAMPLE,
         ));
-        Storage::get('Bot')->webhook();
+        $result = Storage::get('Bot')->webhook();
+
+        $this->assertEquals(false, $result);
+        // $this->outputDBHistory();
+        $this->assertDBHistory([
+            ['INSERT INTO a_log', [0, 'error', 'Forbidden webhook', self::ANY_VALUE]],
+        ]);
     }
 
     /**
@@ -191,8 +196,11 @@ class BotTest extends LocalTestCase
         
         //$this->outputDBHistory();
         $this->assertDBHistory([
-            ['INSERT INTO bot_log', [0, 'setWebhook', '{"url":"webhook"}', '{"ok":1,"result":[]}']],
-            ['INSERT INTO a_log', [0, 'tbot-send', 'setWebhook']],
+            ['INSERT INTO bot_log', [0, 'subscriptions',
+                '{"url":"webhook","update_types":["message_created","bot_started","user_added","user_removed","bot_added","bot_removed"]}',
+                '{"marker":1,"updates":[]}'
+            ]],
+            ['INSERT INTO a_log', [0, 'maxbot-send', 'subscriptions']],
         ]);
     }
 
@@ -214,12 +222,13 @@ class BotTest extends LocalTestCase
     public function sendToMainChatsDataProvider()
     {
         return [
-            '123' => [['ok' => 1, 'result' => ['message_id' => '123']], ['11'=>123, '22'=>123], [
-                ['INSERT INTO bot_log', [0, 'sendMessage', '{"chat_id":"22","text":"Test msg"}', '{"ok":1,"result":{"message_id":"123"}}'],
-            ]]],
+            '123' => [['message' => ['body' => ['mid' => 'mid.123']]], ['11'=>'mid.123', '22'=>'mid.123'], [
+                ['INSERT INTO bot_log',
+                    [0, 'POST : messages?chat_id=22', '{"text":"Test msg"}', '{"message":{"body":{"mid":"mid.123"}}}']],
+            ]],
             'no' => [[], [], [
-                ['INSERT INTO bot_log', [0, 'sendMessage', '{"chat_id":"22","text":"Test msg"}', '[]'],
-            ]]],
+                ['INSERT INTO a_log', [0, 'warning', 'Empty mid in response', '[]']],
+            ]],
         ];
     }
 
@@ -230,8 +239,7 @@ class BotTest extends LocalTestCase
     {
         Storage::get('DBSimple')->reset();
         Storage::set('CURL', new FakeCURL([
-            'ok' => 1,
-            'result' => ['message_id' => '123']
+            'message' => ['body' => ['mid' => 'mid.123']],
         ]));
         $status = Storage::get('Bot')->alarm('Test alarm', ['test'=>1]);
         $this->assertEquals(true, $status);
@@ -242,25 +250,18 @@ class BotTest extends LocalTestCase
      * @depends testCreation
      * @dataProvider memberUpdateDataProvider
      */
-    public function testMemberUpdate($status, $sql, $args)
+    public function testMemberUpdate($type, $sql, $args)
     {
         Storage::get('DBSimple')->reset();
-        $update = [
-            'update_id' => 1,
-            'my_chat_member' => [
-                'new_chat_member' => [
-                    'status' => $status,
-                    'user' => ['id' => '00']
-                ],
-                'chat' => [
-                    'id' => 11,
-                    'title' => 'test'
-                ]
-            ]
-        ];
         Storage::set('CURL', new FakeCURL([
-            'ok' => 1,
-            'result' => [$update]
+            'updates' => [[
+                'timestamp' => 1,
+                'update_type' =>  $type,
+                'chat_id' => 11,
+                'user' => ['name' => 'User']
+
+            ]],
+            'message' => ['body' => ['mid' => 'mid.123']],
         ]));
         Storage::get('Bot')->checkUpdates();
 
@@ -271,19 +272,21 @@ class BotTest extends LocalTestCase
     public function memberUpdateDataProvider()
     {
         return [
-            'join' => ['member', 'INSERT INTO bot_chats', [0, 11, 'main', 'test']],
-            'left' => ['left', 'DELETE FROM bot_chats', [0, 11]],
+            'join' => ['bot_added', 'INSERT INTO bot_chats', [0, 11, 'main', '']],
+            'left' => ['bot_removed', 'DELETE FROM bot_chats', [0, 11]],
         ];
     }
 
     public function testgetMainChatsInfo()
     {
         Storage::set('CURL', new FakeCURL([
-            'ok' => 1,
-            'result' => ['type' => 'group', 'title' => 'title']
+            "type" => "chat",
+            "title" => "Title",
+            "status" => "active",
+            "chat_id" => 11,
         ]));
         $result = Storage::get('Bot')->getMainChatsInfo();
-        $this->assertEquals(['title (group)', 'title (group)'], $result);
+        $this->assertEquals(['Title (chat)', 'Title (chat)'], $result);
     }
 
     public function testOzonLoad()
@@ -299,12 +302,17 @@ class BotTest extends LocalTestCase
      */
     public function testBotCommands($text, $db_rows, $db_history)
     {
+        Storage::set('CURL', new FakeCURL([
+            'message' => ['body' => ['mid' => 'mid.123']],
+            'chat_id' => 1,
+        ]));
         Storage::get('DBSimple')->reset($db_rows);
         $update = [
-            'update_id' => 1,
+            'timestamp' => 1,
+            'update_type' => 'message_created',
             'message' => [
-                'text' => $text,
-                'chat' => ['id' => '00']
+                'body' => ['text' => $text],
+                'recipient' => ['chat_id' => '00'],
             ]
         ];
         Storage::get('Bot')->checkUpdate($update);
@@ -321,8 +329,8 @@ class BotTest extends LocalTestCase
             ]],
 
             ['/test', [], [
-                ['INSERT INTO bot_log', [0, 'sendMessage', self::ANY_VALUE, self::ANY_VALUE]],
-                ['INSERT INTO a_log', [0, 'tbot-send', 'sendMessage', self::ANY_VALUE]],
+                ['INSERT INTO bot_log', [0, 'POST : messages?chat_id=22', self::ANY_VALUE, self::ANY_VALUE]],
+                ['INSERT INTO a_log', [0, 'maxbot-send', 'POST : messages?chat_id=22', self::ANY_VALUE]],
             ]],
 
             ['/info', [], [
@@ -340,17 +348,17 @@ class BotTest extends LocalTestCase
             ]],
 
             ['/mainchats', [], [
-                ['INSERT INTO bot_log', [0, 'getChat', '{"chat_id":"22"}', '{"ok":1,"result":{"type":"group","title":"title"}}']],
-                ['INSERT INTO a_log', [0, 'tbot-send', 'getChat', '{"chat_id":"22"}']],
-                ['INSERT INTO bot_log', [0, 'getChat', '{"chat_id":"11"}', '{"ok":1,"result":{"type":"group","title":"title"}}']],
-                ['INSERT INTO a_log', [0, 'tbot-send', 'getChat', '{"chat_id":"11"}']],
+                ['INSERT INTO bot_log', [0, 'GET : chats/22', self::ANY_VALUE]],
+                ['INSERT INTO a_log', [0, 'maxbot-send', 'GET : chats/22']],
+                ['INSERT INTO bot_log', [0, 'GET : chats/11', self::ANY_VALUE]],
+                ['INSERT INTO a_log', [0, 'maxbot-send', 'GET : chats/11']],
             ]],
 
             ['/X_1', [], [
-                ['INSERT INTO bot_log', [0, 'getChat', '{"chat_id":"22"}', '{"ok":1,"result":{"type":"group","title":"title"}}']],
-                ['INSERT INTO a_log', [0, 'tbot-send', 'getChat', '{"chat_id":"22"}']],
-                ['INSERT INTO bot_log', [0, 'getChat', '{"chat_id":"11"}', '{"ok":1,"result":{"type":"group","title":"title"}}']],
-                ['INSERT INTO a_log', [0, 'tbot-send', 'getChat', '{"chat_id":"11"}']],
+                ['INSERT INTO bot_log', [0, 'GET : chats/22', self::ANY_VALUE]],
+                ['INSERT INTO a_log', [0, 'maxbot-send', 'GET : chats/22']],
+                ['INSERT INTO bot_log', [0, 'GET : chats/11', self::ANY_VALUE]],
+                ['INSERT INTO a_log', [0, 'maxbot-send', 'GET : chats/11']],
                 ['DELETE FROM bot_chats WHERE bot_id = ? AND chat_id = ?', [0, '11']],
             ]],
 
@@ -393,10 +401,11 @@ class BotTest extends LocalTestCase
     {
         Storage::get('DBSimple')->reset();
         $update = [
-            'update_id' => 1,
+            'timestamp' => 1,
+            'update_type' => 'message_created',
             'message' => [
-                'text' => '/info',
-                'chat' => ['id' => '11']
+                'body' => ['text' => '/info'],
+                'recipient' => ['chat_id' => '11'],
             ]
         ];
         Storage::get('Bot')->checkUpdate($update);

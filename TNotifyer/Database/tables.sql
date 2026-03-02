@@ -72,7 +72,7 @@ ALTER TABLE `bot_options`
 
 CREATE TABLE `bot_updates` (
   `bot_id` int NOT NULL AUTO_INCREMENT,
-  `update_id` int NOT NULL,
+  `update_id` bigint NOT NULL,
   `cmd` varchar(30) DEFAULT NULL,
   `created` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `value` json NOT NULL

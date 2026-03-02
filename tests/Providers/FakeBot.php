@@ -33,7 +33,7 @@ class FakeBot extends Bot {
 	/**
 	 * @var mixed Ok API response
 	 */
-	public $okResponse = ['ok' => 1];
+	public $okResponse = ['timestamp' => 1];
 
 
 	/**
@@ -45,14 +45,15 @@ class FakeBot extends Bot {
 	 * @param string MAX bot API token
 	 * @param string Telergam admin/alarm chat id (to manage and notify on error)
 	 */
-	public function __construct($bot_id = 0, $bot_host_id = 0, $api_token = '00:AA', $admin_chat_id = '00') {
+	public function __construct($bot_id = 0, $bot_host_id = 0, $api_token = 'AA', $admin_chat_id = '00') {
 
 		$this->bot_id = $bot_id;
 		$this->bot_host_id = $bot_host_id;
 		$this->admin_chat_id = $admin_chat_id;
 
 		// split token into id and key
-		list($this->api_id, $this->api_key) = explode(':', $api_token, 2);
+		$this->api_key = $api_token;
+		$this->api_id = 123;
 
 		// prepare API request uri and secret_token
 		$this->api_path = '/';
@@ -65,7 +66,7 @@ class FakeBot extends Bot {
 	 * 
 	 * @return mixed API response
 	 */
-	public function send($action, $postfields = null, $do_log = true) {
+	public function send($action, $method = 'GET', $postfields = null, $do_log = true) {
 		return $this->okResponse;
 	}
 	

@@ -22,7 +22,7 @@ class MAXBot {
     /**
      * MAX API URL
      */
-	public const MAX_API_URL = 'https://api.telegram.org/bot';
+	public const MAX_API_URL = 'https://platform-api.max.ru';
 	
     /**
      * Max length of code block to send in alarm message
@@ -90,21 +90,18 @@ class MAXBot {
 		$this->bot_host_id = $bot_host_id;
 		$this->admin_chat_id = $admin_chat_id;
 
-		// split token into id and key
-		$parsed_token = explode(':', $api_token, 2);
-		if (empty($parsed_token[1]))
-			throw new InternalException('Wrong MAX Bot token structure!');
-		[$this->api_id, $this->api_key] = $parsed_token;
+		$this->api_key = $api_token;
 
 		// prepare API request uri and secret_token
-		$this->api_path = self::MAX_API_URL . $api_token . '/';
+		$this->api_path = self::MAX_API_URL . '/';
 		$this->api_secret_token = substr($this->api_key, 0, 20);
 
-		// testing the token and get bot info (no log this action)
-		$resp = $this->send('getMe', null, false);
-		if (self::isOK($resp) && isset($resp['result']))
-			$this->info = $resp['result'];
-		else
+		// testing the token and get bot info and id (no log this action)
+		$resp = $this->send('me', 'GET', null, false);
+		if (self::isOK($resp) && isset($resp['user_id'])) {
+			$this->info = $resp;
+			$this->api_id = $resp['user_id'];
+		} else
 			throw new InternalException('Wrong MAX Bot token!');
 
 		// get main chats list
@@ -167,7 +164,7 @@ class MAXBot {
 	 * @return bool status
 	 */
 	public static function isOK($response) {
-		return (isset($response['ok']) && $response['ok'] == 1 && isset($response['result']))? true : false;
+		return (!empty($response))? true : false;
 	}
 	
 	/**
@@ -175,31 +172,36 @@ class MAXBot {
 	 * Send a request to MAX API
 	 * 
 	 * @param string API method
+	 * @param string request method (optional, GET by default)
 	 * @param mixed request data (optional)
 	 * @param bool store an action to log (true by default)
 	 * 
 	 * @return mixed API response
 	 */
-	public function send($action, $postfields = null, $do_log = true) {
+	public function send($action, $method = 'GET', $postfields = null, $do_log = true) {
 		// do log
 		if ($do_log)
-			Log::put('tbot-send', $action, $postfields);
+			Log::put('maxbot-send', "$method : $action", $postfields);
 
 		// do request
-		$response = Storage::get('CURL')->post(
-			$this->api_path . $action,
-			['Content-Type: application/json'],
-			is_null($postfields)? '' : json_encode($postfields)
+		$response = Storage::get('CURL')->request(
+			"{$this->api_path}{$action}",
+			$method,
+			[
+				"Authorization: {$this->api_key}",
+				'Content-Type: application/json'
+			],
+			(null === $postfields)? '' : json_encode($postfields)
 		);
 
 		// check response
 		if ($do_log) {
 			if (empty($response)) {
-				Log::put('error', "Empty response on $action");
+				Log::put('error', "Empty response on $method : $action");
 			} elseif (!self::isOK($response)) {
-				Log::put('error', "No OK response on $action", $response);
+				Log::put('error', "No OK response on $method : $action", $response);
 			}
-			DB::insert_bot_log($this->bot_id, $action, $postfields, $response);
+			DB::insert_bot_log($this->bot_id, "$method : $action", $postfields, $response);
 		}
 		
 		return $response;
@@ -215,22 +217,24 @@ class MAXBot {
 	 */
 	public function getUpdates($new_only = true) {
 		// MAX API action
-		$action = 'getUpdates';
+		$action = 'updates';
 
-		// filter
-		if ($new_only) {
-			$sql = 'SELECT max(update_id)+1 FROM bot_updates WHERE bot_id=' . $this->bot_id;
-			$update_id = ($result = DB::fetch_row($sql))? $result[0] : 1;
-			if ($update_id)
-				$action .= '?offset=' . $update_id;
-		}
+		// // filter
+		// if ($new_only) {
+		// 	$sql = 'SELECT max(update_id)+1 FROM bot_updates WHERE bot_id=' . $this->bot_id;
+		// 	$update_id = ($result = DB::fetch_row($sql))? $result[0] : 1;
+		// 	if ($update_id)
+		// 		$action .= '?offset=' . $update_id;
+		// }
 
 		// make request (no log this action)
-		$response = $this->send($action, null, false);
+		$response = $this->send($action, 'GET', null, false);
 
 		// save
-		if ($response && isset($response['result'])) {
-			DB::insert_bot_updates($this->bot_id, $response['result']);
+		if ($response && isset($response['updates'])) {
+			foreach ($response['updates'] as &$update) {
+				DB::insert_bot_update($this->bot_id, $update);
+			}
 		}
 		
 		return $response;
@@ -247,8 +251,8 @@ class MAXBot {
 		$response = $this->getUpdates();
 
 		// check
-		if ($response && isset($response['result'])) {
-			foreach ($response['result'] as &$update) {
+		if ($response && isset($response['updates'])) {
+			foreach ($response['updates'] as &$update) {
 				$this->checkUpdate($update);
 			}
 		}
@@ -267,26 +271,25 @@ class MAXBot {
 		// do not throw exception on bot update
 		try {
 			// inspecting my_chat_member update
-			$r_status = &$update['my_chat_member']['new_chat_member']['status'];
-			$r_user_id = &$update['my_chat_member']['new_chat_member']['user']['id'];
-			$r_chat_id = &$update['my_chat_member']['chat']['id'];
-			$r_chat_title = &$update['my_chat_member']['chat']['title'];
+			$r_type = &$update['update_type'];
+			$r_chat_id = &$update['chat_id'];
+			$r_user_name = &$update['user']['name'];
 
-			// if this bot added/removed like member to/from chat
-			if ($this->api_id == ($r_user_id ?? '') && isset($r_chat_id)) {
-				if ('member' == ($r_status ?? '')) {
+			// if this bot added/removed type
+			if (isset($r_chat_id)) {
+				if ('bot_added' == ($r_type ?? '')) {
 					// store chat into main list
-					DB::save_bot_chats($this->bot_id, $r_chat_id, 'main', $r_chat_title);
+					DB::save_bot_chats($this->bot_id, $r_chat_id, 'main', '');
 					// notify about adding
-					$this->sendToAlarmChat("Привязан новый чат для оповещений: " . ($r_chat_title ?? ''));
+					$this->sendToAlarmChat("Привязан новый чат для оповещений, добавил: " . ($r_user_name ?? ''));
 				}
-				if ('left' == ($r_status ?? '')) {
+				if ('bot_removed' == ($r_type ?? '')) {
 					// remove chat from main list
 					DB::remove_bot_chats($this->bot_id, $r_chat_id);
 				}
 			}
 			
-			unset($r_status, $r_user_id, $r_chat_id, $r_chat_title);
+			unset($r_type, $r_chat_id, $r_user_name);
 		} catch(\Exception $e) {
 			Log::put('error', "Fail my_chat_member update check. " . $e->getMessage());
 		}
@@ -301,24 +304,30 @@ class MAXBot {
 	public function webhook() {
 		// check request
 		$request = Storage::get('Request');
-		$r_secret_token = &$request->headers['X-MAX-Bot-Api-Secret-Token'];
-		if (!isset($r_secret_token) || $r_secret_token != $this->api_secret_token)
-			throw new InternalException('Forbidden!');
+		$r_secret_token = &$request->headers['X-Max-Bot-Api-Secret'];
+		if (!isset($r_secret_token) || $r_secret_token != $this->api_secret_token) {
+			// throw new InternalException('Forbidden!');
+			Log::put('error', "Forbidden webhook", $request->headers);
+			return false;
+		}
 
 		// get request data
 		$update = $request->post;
 
-		if ($update && isset($update['update_id'])) {
+		if ($update && isset($update['timestamp'])) {
 			// save
-			DB::insert_bot_updates($this->bot_id, [$update]);
+			DB::insert_bot_update($this->bot_id, $update);
 
 			// check
 			$this->checkUpdate($update);
 
 			return true;
+
+		} else {
+			Log::put('warning', "Fail webhook", $request);
+
+			return false;
 		}
-		
-		return false;
 	}
 	
 	/**
@@ -339,20 +348,21 @@ class MAXBot {
 	 */
 	public function setWebhook() {
 		// MAX API action and request data
-		$action = 'setWebhook';
+		$action = 'subscriptions';
 		$postfields = [
 			'url' => $this->getWebhookUrl(),
-			'secret_token' => $this->api_secret_token
+			'update_types' => ['message_created', 'bot_started', 'user_added', 'user_removed', 'bot_added', 'bot_removed'],
+			'secret' => $this->api_secret_token
 		];
 
 		// log
-		Log::put('tbot-send', $action);
+		Log::put('maxbot-send', $action);
 
 		// make request to MAX API without log for security reason
-		$response = $this->send($action, $postfields, false);
+		$response = $this->send($action, 'POST', $postfields, false);
 
 		// bot log
-		unset($postfields['secret_token']);
+		unset($postfields['secret']);
 		DB::insert_bot_log($this->bot_id, $action, $postfields, $response);
 
 		return $response;
@@ -366,7 +376,7 @@ class MAXBot {
 	 */
 	public function removeWebhook() {
 		// make request to MAX API
-		return $this->send('deleteWebhook');
+		return $this->send('subscriptions?url=' . $this->getWebhookUrl(), 'DELETE');
 	}
 	
 	/**
@@ -379,7 +389,7 @@ class MAXBot {
 	 */
 	public function getChat($chat_id) {
 		// make request to MAX API
-		return $this->send('getChat', ['chat_id' => $chat_id]);
+		return $this->send("chats/$chat_id");
 	}
 	
 	/**
@@ -392,14 +402,13 @@ class MAXBot {
 	 */
 	public function getChatTitle($chat_id) {
 		$res = $this->getChat($chat_id);
-		if (!self::isOK($res) || empty($res['result'])) {
+		if (!self::isOK($res) || empty($res['chat_id'])) {
 			Log::put('error', 'Wrong response from getChat', $res);
 			return '';
 		}
-		$chat = $res['result'] ?? [];
-		$type = $chat['type'] ?? '';
-		$title = $chat['title'] ?? $chat['username'] ?? '';
-		$name = trim(($chat['first_name'] ?? '') . ' ' . ($chat['last_name'] ?? ''));
+		$type = $res['type'] ?? '';
+		$title = $res['title'] ?? $res['username'] ?? '';
+		$name = trim(($res['first_name'] ?? '') . ' ' . ($res['last_name'] ?? ''));
 		return $title . (!empty($name)? " / $name" : '') . " ($type)";
 	}
 	
@@ -413,25 +422,28 @@ class MAXBot {
 	 * @param bool store an action to log (true by default)
 	 * @param array more postfields to send (optional)
 	 * 
-	 * @return int|bool message id or false
+	 * @return string|bool message id or false
 	 */
 	public function sendMessage($chat_id, $text, $parse_mode = '', $do_log = true, $more_fields = null) {
 		// MAX API action and request data
-		$action = 'sendMessage';
+		$action = "messages?chat_id={$chat_id}";
 		$postfields = [
-			'chat_id' => $chat_id,
 			'text' => $text
 		];
 		if (!empty($parse_mode))
-			$postfields['parse_mode'] = $parse_mode;
+			$postfields['format'] = $parse_mode;
 		if (!empty($more_fields))
 			$postfields = array_merge($postfields, $more_fields);
 
 		// make request to MAX API
-		$response = $this->send($action, $postfields, $do_log);
+		$response = $this->send($action, 'POST', $postfields, $do_log);
 		Log::debug(print_r($response, true));
-		
-		return self::isOK($response)? intval($response['result']['message_id'] ?? 0) : false;
+
+		$mid = (($response['message'] ?? [])['body'] ?? [])['mid'] ?? '';
+		if (empty($mid))
+			Log::put('warning', 'Empty mid in response', $response);
+
+		return self::isOK($response)? $mid ?? '' : false;
 	}
 	
 	/**
@@ -467,7 +479,7 @@ class MAXBot {
 	public function replyToMainChats($reply_ids, $text, $parse_mode = '', $do_log = true) {
 		$result = [];
 		foreach ($this->main_chats_ids as $i => $chat_id) {
-			$more = !empty($reply_ids[$chat_id])? ['reply_parameters' => ['message_id' => $reply_ids[$chat_id]]] : null;
+			$more = !empty($reply_ids[$chat_id])? ['link' => ['mid' => $reply_ids[$chat_id], 'type' => 'reply']] : null;
 			if ($message_id = $this->sendMessage($chat_id, $text, $parse_mode, $do_log, $more))
 				$result[$chat_id] = $message_id;
 		}
@@ -482,7 +494,7 @@ class MAXBot {
 	 * @param bool store an action to log (false by default)
 	 * @param array more postfields to send (optional)
 	 * 
-	 * @return int|bool message id or status of the operation
+	 * @return string|bool message id or status of the operation
 	 */
 	public function sendToAlarmChat($message, $parse_mode = '', $do_log = false, $more_fields = null) {
 		return $this->sendMessage($this->admin_chat_id, $message, $parse_mode, $do_log, $more_fields);
