@@ -56,6 +56,8 @@ class LocalTestCase extends TestCase
 
         // calc last index of DB history
         $last_index = count($db->sql_history) - 1;
+        if ($last_index == -1)
+            $this->assertCount(1, $db->sql_history, '[assertDBHistory] History is empty!');
 
         foreach ($db_history as $i => $step) {
             // check step
