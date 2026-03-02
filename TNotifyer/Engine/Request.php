@@ -93,11 +93,14 @@ class Request {
         if (isset($headers['Content-Type'])) {
             $postData = file_get_contents('php://input');
 
-            if ($headers['Content-Type'] == 'application/json') {
+            if (substr($headers['Content-Type'], 0, 16) == 'application/json') {
                 $this->post = json_decode($postData, true);
 
-            } elseif ($headers['Content-Type'] == 'application/x-www-form-urlencoded' || $headers['Content-Type'] == 'multipart/form-data') {
-                $this->post = parse_str($postData);
+            } elseif (substr($headers['Content-Type'], 0, 33) == 'application/x-www-form-urlencoded') {
+                parse_str($postData, $this->post);
+
+            } elseif (substr($headers['Content-Type'], 0, 19) == 'multipart/form-data') {
+                parse_str($postData, $this->post);
 
             } else {
                 $this->post = $_POST;
