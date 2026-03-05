@@ -6,6 +6,7 @@
  */
 namespace TNotifyer\Providers;
 
+use function is_array;
 use TNotifyer\Database\DB;
 use TNotifyer\Engine\Storage;
 use TNotifyer\Providers\Log;
@@ -164,7 +165,7 @@ class MAXBot {
 	 * @return bool status
 	 */
 	public static function isOK($response) {
-		return (!empty($response))? true : false;
+		return (!empty($response) && is_array($response))? true : false;
 	}
 	
 	/**
@@ -218,14 +219,6 @@ class MAXBot {
 	public function getUpdates($new_only = true) {
 		// MAX API action
 		$action = 'updates';
-
-		// // filter
-		// if ($new_only) {
-		// 	$sql = 'SELECT max(update_id)+1 FROM bot_updates WHERE bot_id=' . $this->bot_id;
-		// 	$update_id = ($result = DB::fetch_row($sql))? $result[0] : 1;
-		// 	if ($update_id)
-		// 		$action .= '?offset=' . $update_id;
-		// }
 
 		// make request (no log this action)
 		$response = $this->send($action, 'GET', null, false);
@@ -306,7 +299,6 @@ class MAXBot {
 		$request = Storage::get('Request');
 		$r_secret_token = &$request->headers['X-Max-Bot-Api-Secret'];
 		if (!isset($r_secret_token) || $r_secret_token != $this->api_secret_token) {
-			// throw new InternalException('Forbidden!');
 			Log::put('error', "Forbidden webhook", $request->headers);
 			return false;
 		}
@@ -439,11 +431,13 @@ class MAXBot {
 		$response = $this->send($action, 'POST', $postfields, $do_log);
 		Log::debug(print_r($response, true));
 
+		if (!self::isOK($response)) return false;
+
 		$mid = (($response['message'] ?? [])['body'] ?? [])['mid'] ?? '';
 		if (empty($mid))
 			Log::put('warning', 'Empty mid in response', $response);
 
-		return self::isOK($response)? $mid ?? '' : false;
+		return $mid;
 	}
 	
 	/**

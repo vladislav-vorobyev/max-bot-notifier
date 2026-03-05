@@ -226,8 +226,8 @@ class BotTest extends LocalTestCase
                 ['INSERT INTO bot_log',
                     [0, 'POST : messages?chat_id=22', '{"text":"Test msg"}', '{"message":{"body":{"mid":"mid.123"}}}']],
             ]],
-            'no' => [[], [], [
-                ['INSERT INTO a_log', [0, 'warning', 'Empty mid in response', '[]']],
+            'no' => [[[]], [], [
+                ['INSERT INTO a_log', [0, 'warning', 'Empty mid in response', self::ANY_VALUE]],
             ]],
         ];
     }
