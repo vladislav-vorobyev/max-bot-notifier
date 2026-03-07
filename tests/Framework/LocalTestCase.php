@@ -1,24 +1,15 @@
 <?php
 namespace TNotifyer\Framework;
 
+use function count;
+use function strlen;
+use function substr;
 use PHPUnit\Framework\TestCase;
 use TNotifyer\Engine\Storage;
-use TNotifyer\Engine\FakeRequest;
-use TNotifyer\Database\FakeDBSimple;
-use TNotifyer\Providers\FakeBot;
-use TNotifyer\Providers\FakeCURL;
 
 class LocalTestCase extends TestCase
 {
-    const ANY_VALUE = '***';
-
-    /**
-     * This method is called before the first test of this test class is run.
-     */
-    public static function setUpBeforeClass(): void
-    {
-        Storage::set('DBSimple', new FakeDBSimple());
-    }
+    public const ANY_VALUE = '***';
 
     /**
      * Print string into output.
@@ -46,10 +37,13 @@ class LocalTestCase extends TestCase
     public static function outputDBHistory()
     {
         $db = Storage::get('DBSimple');
-        self::outputVar("\n[DB-History]:\n");
-        foreach ($db->sql_history as $i => $value) {
-            self::output("[$i] => $value\n");
-            self::outputVar($db->args_history[$i]);
+        self::output("\n[DB-History]:\n");
+        foreach ($db->sql_history as $i => $sql) {
+            self::output("  [$i] => $sql\n");
+            foreach ($db->args_history[$i] ?? [] as $j => $v) {
+                self::output("    [$j] => $v\n");
+            }
+            self::output("\n");
         }
     }
 
@@ -77,7 +71,7 @@ class LocalTestCase extends TestCase
             if (count($step) != 2)
                 $this->assertCount(2, $step, '[assertDBHistory] Two parameters required for step!');
 
-            list($sql, $args) = $step;
+            [$sql, $args] = $step;
 
             // take sql and args from db history step by step backward
             $db_sql = $db->sql_history[$last_index - $i];
