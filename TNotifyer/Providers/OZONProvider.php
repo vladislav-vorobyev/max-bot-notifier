@@ -42,6 +42,11 @@ class OZONProvider {
 	protected $api_key;
 
 	/**
+	 * @var CURL api request instance
+	 */
+	protected $curl;
+
+	/**
 	 * 
 	 * Constructor
 	 * 
@@ -69,7 +74,8 @@ class OZONProvider {
 		];
 		
 		Log::debug("POST {$url}\n<i>{$postfields}</i>\n");
-		$data = Storage::get('CURL')->post($url, $headers, $postfields);
+		$this->curl = clone Storage::get('CURL');
+		$data = $this->curl->post($url, $headers, $postfields);
 		
 		return $data;
 	}
@@ -342,12 +348,12 @@ class OZONProvider {
 
 		if (empty($data)) {
 			$this->last_error_message = 'OZON empty response or JSON error';
-			Log::put('error', $this->last_error_message, ['request' => Storage::get('CURL')->last_request]);
+			Log::put('error', $this->last_error_message, ['request' => $this->curl->last_request]);
 			throw new ExternalRequestException($this->last_error_message);
 
 		} elseif (!isset($r_postings)) {
 			$this->last_error_message = 'OZON wrong response';
-			Log::put('error', $this->last_error_message, ['request' => Storage::get('CURL')->last_request, 'response' => $data]);
+			Log::put('error', $this->last_error_message, ['request' => $this->curl->last_request, 'response' => $data]);
 			throw new ExternalRequestException($this->last_error_message);
 		}
 
