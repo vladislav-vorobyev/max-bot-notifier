@@ -62,7 +62,7 @@ class DBCommon extends DBSimple {
 			// skip null values
 			if (null !== $value) {
 				if (is_array($value)) {
-					$operation = $value[0];
+					$operation = "={$value[0]}";
 				} else {
 					$operation = '=?';
 					// add arg and bindings string
@@ -130,6 +130,49 @@ class DBCommon extends DBSimple {
 	}
 	
 	/**
+	 * Remove rows from the table
+	 * 
+	 * @param string table name
+	 * @param array 'key' array of where cases
+	 *   each like 'column' => null | $value | ['operation', $value] | ['operation'] (skipped if null)
+	 * 
+	 * @return int|bool removed count, false - operation fail
+	 */
+	public static function delete($table_name, $key) {
+		$bind = '';
+		$args = [];
+		$parts = [];
+
+		// prepare where sql part
+		foreach ($key as $column => $value)
+			if ($value !== null) {
+				if (is_array($value)) {
+					if (isset($value[1])) {
+						$operation = "{$value[0]}?";
+						// add arg and bindings string
+						$args[] = $value[1];
+						$bind .= is_string($value[1])? 's' : 'i';
+					} else {
+						$operation = " {$value[0]}";
+					}
+				} else {
+					$operation = '=?';
+					// add arg and bindings string
+					$args[] = $value;
+					$bind .= is_string($value)? 's' : 'i';
+				}
+				$parts[] = "{$column}{$operation}";
+			}
+		$where = implode(' AND ', $parts);
+
+		// prepare sql
+		$sql = "DELETE FROM {$table_name} WHERE {$where}";
+
+		// execute
+		return self::execute_sql($sql, $bind, ...$args);
+	}
+	
+	/**
 	 * Check if row exists in the table
 	 * 
 	 * @param string table name
@@ -153,6 +196,8 @@ class DBCommon extends DBSimple {
 	 *   @param array 'where' array of where cases (optional)
 	 *    where case like 'column' => null | $value | ['operation', $value] | ['operation'] (skipped if null)
 	 *   @param string 'columns' to select (optional, * by default)
+	 * 
+	 * @return array|bool result rows, false - operation fail
 	 * }
 	 */
 	public static function select($table_name, $params) {
