@@ -43,6 +43,8 @@ class CURL {
 	 * @param string request method ('GET' by default)
 	 * @param array request headers (optional)
 	 * @param mixed request body (optional)
+	 * 
+	 * @return mixed|false response | decoded response | false on fail
 	 */
 	public function request($url, $method = 'GET', $headers = [], $postfields = '') {
 		$this->last_request = [
@@ -108,9 +110,9 @@ class CURL {
 
 		if ($this->make_json_decode) {
 			$response = @json_decode($result, true);
-			if (empty($response)) {
+			if (json_last_error() != JSON_ERROR_NONE) {
 				// wrong data
-				$msg = "Can't decode JSON: " . (json_last_error() != JSON_ERROR_NONE)? json_last_error_msg() : '';
+				$msg = "Can't decode JSON: " . json_last_error_msg();
 				Log::put('error', $msg, ['request' => $this->last_request, 'response' => $result]); // log error
 				if (!$this->silent_on_error) {
 					echo $msg;
