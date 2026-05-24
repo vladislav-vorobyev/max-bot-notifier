@@ -10,6 +10,8 @@ use function is_string;
 use function is_array;
 use function count;
 use function implode;
+use \DateTime;
+use \DateTimeInterface;
 
 /**
  * 
@@ -65,9 +67,7 @@ class DBCommon extends DBSimple {
 					$operation = "={$value[0]}";
 				} else {
 					$operation = '=?';
-					// add arg and bindings string
-					$args[] = $value;
-					$bind .= is_string($value)? 's' : 'i';
+					self::add_args($args, $bind, $value);
 				}
 				$set[] = "{$column}{$operation}";
 			}
@@ -113,9 +113,7 @@ class DBCommon extends DBSimple {
 					$values_part[] = $value[0];
 				} else {
 					$values_part[] = '?';
-					// add arg and bindings string
-					$args[] = $value;
-					$bind .= is_string($value)? 's' : 'i';
+					self::add_args($args, $bind, $value);
 				}
 			}
 		
@@ -149,17 +147,13 @@ class DBCommon extends DBSimple {
 				if (is_array($value)) {
 					if (isset($value[1])) {
 						$operation = "{$value[0]}?";
-						// add arg and bindings string
-						$args[] = $value[1];
-						$bind .= is_string($value[1])? 's' : 'i';
+						self::add_args($args, $bind, $value[1]);
 					} else {
 						$operation = " {$value[0]}";
 					}
 				} else {
 					$operation = '=?';
-					// add arg and bindings string
-					$args[] = $value;
-					$bind .= is_string($value)? 's' : 'i';
+					self::add_args($args, $bind, $value);
 				}
 				$parts[] = "{$column}{$operation}";
 			}
@@ -210,24 +204,17 @@ class DBCommon extends DBSimple {
 			foreach ($params['where'] as $column => $value)
 				// skip null values
 				if (null !== $value) {
-					$add_arg = true;
 					if (is_array($value)) {
-						$operation = $value[0];
 						if (isset($value[1])) {
-							$operation .= '?';
-							$value = $value[1];
+							$operation = "{$value[0]}?";
+							self::add_args($args, $bind, $value[1]);
 						} else {
-							// no arg to add
-							$add_arg = false;
+							$operation = $value[0];
 						}
 					} else {
 						// default operation
 						$operation = '=?';
-					}
-					if ($add_arg) {
-						// add arg and bindings string
-						$args[] = $value;
-						$bind .= is_string($value)? 's' : 'i';
+						self::add_args($args, $bind, $value);
 					}
 					$where[] = "{$column}{$operation}";
 				}
@@ -259,4 +246,19 @@ class DBCommon extends DBSimple {
 		return self::result_by_sql($sql, $bind, ...$args);
 	}
 
+	/**
+	 * Add one more value to arguments list and bindings string
+	 * 
+	 * @param array agruments list (adjusting via referense)
+	 * @param string agruments bindings (adjusting via referense)
+	 * @param mixed value
+	 */
+	protected static function add_args(&$args, &$bind, $value) {
+		// if datetime type then converting to string
+		if ($value instanceof DateTime)
+			$value = $value->format(DateTimeInterface::RFC3339);
+		// add args and bindings string
+		$args[] = $value;
+		$bind .= is_string($value)? 's' : 'i';
+	}
 }
