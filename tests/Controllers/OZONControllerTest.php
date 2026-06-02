@@ -14,7 +14,7 @@ class OZONControllerTest extends LocalTestCase
 {
     const OK_RESPONSE = [
         'ok' => 1,
-        'result' => ['postings' => []]
+        'postings' => []
     ];
 
 

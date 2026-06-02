@@ -11,6 +11,7 @@ class OZONProviderTest extends LocalTestCase
 {
     const POSTING_EXAMPLE = [
         "status" => "awaiting_packaging",
+        "substatus" => "posting_created",
         "order_id" => 34454315739,
         "products" => [
             [
@@ -32,6 +33,7 @@ class OZONProviderTest extends LocalTestCase
 
     const CANCELLED_EXAMPLE = [
         "status" => "cancelled",
+        "substatus" => "posting_canceled",
         "order_id" => 34454315739,
         "products" => [
             [
@@ -94,8 +96,8 @@ class OZONProviderTest extends LocalTestCase
         $this->assertNotEmpty(Storage::get('Bot')->last_main_msg);
         // $this->outputDBHistory();
         $this->assertDBHistory([
-            ['INSERT INTO posting_status', [0, 'ozon', "36615787-0025-1", "awaiting_packaging", '', '', '{"11":99}', "2026-01-30T19:05:50Z", "awaiting_packaging", '']],
-            ['INSERT IGNORE INTO postings', [0, 'ozon', "36615787-0025-1", "awaiting_packaging", json_encode(self::POSTING_EXAMPLE)]],
+            ['INSERT INTO posting_status', [0, 'ozon', "36615787-0025-1", "awaiting_packaging", 'posting_created', '', '{"11":99}', "2026-01-30T19:05:50Z", "awaiting_packaging", 'posting_created']],
+            ['INSERT IGNORE INTO postings', [0, 'ozon', "36615787-0025-1", "awaiting_packaging+posting_created", json_encode(self::POSTING_EXAMPLE)]],
         ]);
     }
 
@@ -132,9 +134,7 @@ class OZONProviderTest extends LocalTestCase
     {
         Storage::get('DBSimple')->reset();
         Storage::set('CURL', new FakeCURL([
-            'result' => [
-                'postings' => [self::POSTING_EXAMPLE],
-            ],
+            'postings' => [self::POSTING_EXAMPLE],
         ]));
         $ozon = Storage::get('OZON');
         $ozon->doCheckNew();
@@ -154,9 +154,7 @@ class OZONProviderTest extends LocalTestCase
     {
         Storage::get('DBSimple')->reset(['status'=>'']);
         Storage::set('CURL', new FakeCURL([
-            'result' => [
-                'postings' => [self::CANCELLED_EXAMPLE],
-            ],
+            'postings' => [self::CANCELLED_EXAMPLE],
         ]));
         $ozon = Storage::get('OZON');
         $ozon->doCheckCancelled();
@@ -168,8 +166,9 @@ class OZONProviderTest extends LocalTestCase
         // $this->outputDBHistory();
         $this->assertDBHistory([
             ['SELECT * FROM posting_status', [0, 'ozon', '36615787-0025-1', 1]],
-            ['INSERT INTO posting_status', [0, 'ozon', '36615787-0025-1', 'cancelled', '', '', '[]', '2026-01-30T19:05:50Z', 'cancelled', '']],
-            ['INSERT IGNORE INTO postings', [0, 'ozon', '36615787-0025-1', 'cancelled', self::ANY_VALUE]],
+            ['SELECT * FROM posting_status', [0, 'ozon', '36615787-0025-1', 1]],
+            ['INSERT INTO posting_status', [0, 'ozon', '36615787-0025-1', 'cancelled', 'posting_canceled', '', '[]', '2026-01-30T19:05:50Z', 'cancelled', 'posting_canceled']],
+            ['INSERT IGNORE INTO postings', [0, 'ozon', '36615787-0025-1', 'cancelled+posting_canceled', self::ANY_VALUE]],
             ['SELECT * FROM postings', [0, 'ozon', '36615787-0025-1', 1]],
         ]);
     }
@@ -206,9 +205,7 @@ class OZONProviderTest extends LocalTestCase
     {
         Storage::get('DBSimple')->reset(['status'=>'']);
         Storage::set('CURL', new FakeCURL([
-            'result' => [
-                'postings' => [self::CANCELLED_EXAMPLE],
-            ],
+            'postings' => [self::CANCELLED_EXAMPLE],
         ]));
         $ozon = Storage::get('OZON');
         $ozon->doCheckStatus();
@@ -220,7 +217,8 @@ class OZONProviderTest extends LocalTestCase
         $this->assertDBHistory([
             ['INSERT INTO a_log', [0, 'check-status', 'OZON']],
             ['SELECT * FROM posting_status', [0, 'ozon', '36615787-0025-1', 1]],
-            ['INSERT INTO posting_status', [0, 'ozon', '36615787-0025-1', 'cancelled', '', '', '[]', '2026-01-30T19:05:50Z', 'cancelled', '']],
+            ['SELECT * FROM posting_status', [0, 'ozon', '36615787-0025-1', 1]],
+            ['INSERT INTO posting_status', [0, 'ozon', '36615787-0025-1', 'cancelled', 'posting_canceled', '', '[]', '2026-01-30T19:05:50Z', 'cancelled', 'posting_canceled']],
         ]);
     }
 
@@ -231,7 +229,7 @@ class OZONProviderTest extends LocalTestCase
      */
     public function testWrongDoCheck($data)
     {
-        $this->expectException('TNotifyer\Exceptions\ExternalRequestException');
+        $this->expectException(\TNotifyer\Exceptions\ExternalRequestException::class);
         Storage::set('CURL', new FakeCURL($data));
         Storage::get('OZON')->doCheck();
     }
@@ -240,7 +238,8 @@ class OZONProviderTest extends LocalTestCase
     {
         return [
             'wrong struct' => [['result' => []]],
-            'empty' => [[]]
+            'empty' => [[]],
+            'bad response' => [false],
         ];
     }
 
