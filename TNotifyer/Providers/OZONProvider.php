@@ -6,6 +6,8 @@
  */
 namespace TNotifyer\Providers;
 
+use function is_array;
+use function in_array;
 use TNotifyer\Engine\Storage;
 use TNotifyer\Database\DB;
 use TNotifyer\Providers\Log;
@@ -101,75 +103,78 @@ class OZONProvider {
 	}
 
 	/**
-	 * Requesting a list of unfulfilled postings
+	 * Requesting a list of unfulfilled FBS postings
 	 * 
 	 * @param DateTime requesting period from datetime
 	 * @param DateTime requesting period to datetime
-	 * @param int limit to get (optional, 100 by default)
-	 * @param int offset to start (optional, 0 by default)
+	 * @param int limit to get (optional, 100 by default, 1..100)
+	 * @param int cursor to get next page (optional)
 	 * 
 	 * @return mixed response (OZON API)
 	 */
-	public function getFBSUnfulfilledList($datetime_from, $datetime_to, $limit = 100, $offset = 0) {
-		$url = self::API_URL . '/v3/posting/fbs/unfulfilled/list';
+	public function getFBSUnfulfilledList($datetime_from, $datetime_to, $limit = 100, $cursor = null) {
+		$url = self::API_URL . '/v4/posting/fbs/unfulfilled/list';
 		$postfields = json_encode([
-			'dir' => 'ASC',
+			'sort_dir' => 'ASC',
 			'limit' => $limit,
-			'offset' => $offset,
 			'filter' => [
 				'cutoff_from' => $datetime_from->format(DateTimeInterface::RFC3339),
 				'cutoff_to' => $datetime_to->format(DateTimeInterface::RFC3339)
 			]
 		]);
+		if ($cursor !== null)
+			$postfields['cursor'] = $cursor;
 		return $this->post($url, $postfields);
 	}
 
 	/**
-	 * Requesting a list of all postings
+	 * Requesting a list of FBS postings
 	 * 
 	 * @param DateTime requesting period from datetime
 	 * @param DateTime requesting period to datetime
-	 * @param int limit to get (optional, 100 by default)
-	 * @param int offset to start (optional, 0 by default)
+	 * @param int limit to get (optional, 100 by default, 1..100)
+	 * @param int cursor to get next page (optional)
 	 * 
 	 * @return mixed response (OZON API)
 	 */
-	public function getFBSList($datetime_from, $datetime_to, $limit = 100, $offset = 0) {
-		$url = self::API_URL . '/v3/posting/fbs/list';
+	public function getFBSList($datetime_from, $datetime_to, $limit = 100, $cursor = null) {
+		$url = self::API_URL . '/v4/posting/fbs/list';
 		$postfields = json_encode([
-			'dir' => 'ASC',
+			'sort_dir' => 'ASC',
 			'limit' => $limit,
-			'offset' => $offset,
 			'filter' => [
 				'since' => $datetime_from->format(DateTimeInterface::RFC3339),
 				'to' => $datetime_to->format(DateTimeInterface::RFC3339)
 			]
 		]);
+		if ($cursor !== null)
+			$postfields['cursor'] = $cursor;
 		return $this->post($url, $postfields);
 	}
 
 	/**
-	 * Requesting a list of cancelled postings
+	 * Requesting a list of cancelled FBS postings
 	 * 
 	 * @param DateTime requesting period from datetime
 	 * @param DateTime requesting period to datetime
-	 * @param int limit to get (optional, 100 by default)
-	 * @param int offset to start (optional, 0 by default)
+	 * @param int limit to get (optional, 100 by default, 1..100)
+	 * @param int cursor to get next page (optional)
 	 * 
 	 * @return mixed response (OZON API)
 	 */
-	public function getCancelledFBSList($datetime_from, $datetime_to, $limit = 100, $offset = 0) {
-		$url = self::API_URL . '/v3/posting/fbs/list';
+	public function getCancelledFBSList($datetime_from, $datetime_to, $limit = 100, $cursor = null) {
+		$url = self::API_URL . '/v4/posting/fbs/list';
 		$postfields = json_encode([
-			'dir' => 'ASC',
+			'sort_dir' => 'ASC',
 			'limit' => $limit,
-			'offset' => $offset,
 			'filter' => [
 				'status' => 'cancelled',
 				'since' => $datetime_from->format(DateTimeInterface::RFC3339),
 				'to' => $datetime_to->format(DateTimeInterface::RFC3339)
 			]
 		]);
+		if ($cursor !== null)
+			$postfields['cursor'] = $cursor;
 		return $this->post($url, $postfields);
 	}
 
@@ -202,9 +207,9 @@ class OZONProvider {
 	 * Check postings status
 	 * 
 	 * @param string period to check (optional, 1 month by default)
-	 * @param int offset to start (optional, 0 by default)
+	 * @param mixed cursor to get next page (optional)
 	 */
-	public function doCheckStatus($period = '', $offset = 0) {
+	public function doCheckStatus($period = '', $cursor = null) {
 		if (empty($period)) {
 			// determine a period from statuses records
 			$days = $this->getUnfinishedPeriod();
@@ -214,7 +219,7 @@ class OZONProvider {
 		// get postings in period
 		$datetime_from = ( new DateTime('now') )->sub( DateInterval::createFromDateString(empty($period)? '1 month' : $period) );
 		$datetime_to = new DateTime('now');
-		$data = $this->getFBSList($datetime_from, $datetime_to, 1000, $offset);
+		$data = $this->getFBSList($datetime_from, $datetime_to, 100, $cursor);
 
 		// verify response
 		$r_postings = $this->verifyPostingsResponse($data);
@@ -229,13 +234,12 @@ class OZONProvider {
 			}
 		}
 
-		if (empty($offset))
+		if ($cursor === null)
 			Log::put('check-status', 'OZON');
 
 		// if has next then call recursively
-		$r_has_next = &$data['result']['has_next'];
-		if (!empty($r_has_next)) {
-			$this->doCheckStatus($period, $offset + 1000);
+		if (($data['has_next'] ?? '') == true) {
+			$this->doCheckStatus($period, $data['cursor']);
 		}
 	}
 
@@ -254,13 +258,13 @@ class OZONProvider {
 	 * Check cancelled postings
 	 * 
 	 * @param string period to check (optional)
-	 * @param int offset to start (optional, 0 by default)
+	 * @param mixed cursor to get next page (optional)
 	 */
-	public function doCheckCancelled($period = '', $offset = 0) {
+	public function doCheckCancelled($period = '', $cursor = null) {
 		// get postings after last check but not far then 24 hours
 		$datetime_from = ( new DateTime('now') )->sub( DateInterval::createFromDateString(empty($period)? '7 days' : $period) );
 		$datetime_to = new DateTime('now');
-		$data = $this->getCancelledFBSList($datetime_from, $datetime_to, 100, $offset);
+		$data = $this->getCancelledFBSList($datetime_from, $datetime_to, 100, $cursor);
 
 		// verify response
 		$r_postings = $this->verifyPostingsResponse($data);
@@ -277,9 +281,8 @@ class OZONProvider {
 		}
 
 		// if has next then call recursively
-		$r_has_next = &$data['result']['has_next'];
-		if (!empty($r_has_next)) {
-			$this->doCheckCancelled($period, $offset + 100);
+		if (($data['has_next'] ?? '') == true) {
+			$this->doCheckCancelled($period, $data['cursor']);
 		}
 	}
 
@@ -298,9 +301,9 @@ class OZONProvider {
 	 * Check new postings
 	 * 
 	 * @param string period to check (optional)
-	 * @param int offset to start (optional, 0 by default)
+	 * @param mixed cursor to get next page (optional)
 	 */
-	public function doCheckNew($period = '', $offset = 0) {
+	public function doCheckNew($period = '', $cursor = null) {
 		if (empty($period)) {
 			// determine a time from last check but not far then 24 hours
 			$time = $this->getLastCheckTime();
@@ -310,7 +313,7 @@ class OZONProvider {
 		// get postings in period
 		$datetime_from = ( new DateTime('now') )->sub( DateInterval::createFromDateString($period) );
 		$datetime_to = new DateTime('now');
-		$data = $this->getFBSList($datetime_from, $datetime_to, 100, $offset);
+		$data = $this->getFBSList($datetime_from, $datetime_to, 100, $cursor);
 
 		// verify response
 		$r_postings = $this->verifyPostingsResponse($data);
@@ -326,38 +329,43 @@ class OZONProvider {
 			}
 		}
 
-		if (empty($offset))
+		if ($cursor === null)
 			Log::put('check', 'OZON');
 
 		// if has next then call recursively
-		$r_has_next = &$data['result']['has_next'];
-		if (!empty($r_has_next)) {
-			$this->doCheckNew($period, $offset + 100);
+		if (($data['has_next'] ?? '') == true) {
+			$this->doCheckNew($period, $data['cursor']);
 		}
 	}
 
 	/**
-	 * Verify postings response
+	 * Verify v4 postings response
 	 * 
-	 * @param mixed OZON API response
+	 * @param mixed OZON API v4 response
 	 * 
 	 * @return mixed reference to postings array
 	 */
 	public function verifyPostingsResponse(&$data) {
-		$r_postings = &$data['result']['postings'];
+		if (false === $data) {
+			$this->last_error_message = 'OZON JSON error';
+			// Log::put('error', $this->last_error_message, ['request' => $this->curl->last_request]); error already sent
+			Log::put('warning', $this->last_error_message);
+			throw new ExternalRequestException($this->last_error_message);
+		}
 
 		if (empty($data)) {
-			$this->last_error_message = 'OZON empty response or JSON error';
-			Log::put('error', $this->last_error_message, ['request' => $this->curl->last_request]);
+			$this->last_error_message = 'OZON empty response';
+			Log::put('warning', $this->last_error_message);
 			throw new ExternalRequestException($this->last_error_message);
+		}
 
-		} elseif (!isset($r_postings)) {
+		if (!is_array($data) || !is_array($data['postings'] ?? '')) {
 			$this->last_error_message = 'OZON wrong response';
 			Log::put('error', $this->last_error_message, ['request' => $this->curl->last_request, 'response' => $data]);
 			throw new ExternalRequestException($this->last_error_message);
 		}
 
-		return $r_postings;
+		return $data['postings'];
 	}
 
 	/**
